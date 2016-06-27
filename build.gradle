@@ -1,0 +1,143 @@
+buildscript {
+    repositories {
+        jcenter()
+    }
+
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:1.3.5.RELEASE")
+    }
+}
+// settings for all projects
+allprojects {
+    apply plugin: 'java'
+    apply plugin: 'eclipse'
+    apply plugin: 'idea'
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'jacoco'
+
+    group 'io.github.chriszhong'
+
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+
+    repositories {
+        jcenter()
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom 'io.spring.platform:platform-bom:2.0.5.RELEASE'
+        }
+    }
+
+    sourceSets {
+        integrationTest {
+            compileClasspath += main.output + test.output
+            runtimeClasspath += main.output + test.output
+
+            java {
+                srcDir 'src/test-integration/java'
+            }
+
+            resources {
+                srcDir 'src/test-integration/resources'
+            }
+        }
+    }
+
+    configurations {
+        integrationTestCompile {
+            extendsFrom testCompile
+        }
+        integrationTestRuntime {
+            extendsFrom testRuntime
+        }
+    }
+
+    idea {
+        module {
+            testSourceDirs += sourceSets.integrationTest.java.srcDirs
+            testSourceDirs += sourceSets.integrationTest.resources.srcDirs
+        }
+    }
+
+    task integrationTest(type: Test) {
+        check {
+            dependsOn integrationTest
+        }
+        testClassesDir sourceSets.integrationTest.output.classesDir
+        classpath = sourceSets.integrationTest.runtimeClasspath
+    }
+
+    task testReport(type: TestReport) {
+        dependsOn check
+        destinationDir file("${reporting.baseDir}/unified/html")
+        reportOn test, integrationTest
+    }
+
+    task jacocoMerge(type: JacocoMerge) {
+        dependsOn check
+        executionData test, integrationTest
+        // temporary hack to fix a bug requiring that there be at least one test case in each source set for coverage data to be generated;
+        // it should be if there is at least one test case in any of the source sets
+        executionData = files(executionData.findAll({ it.exists() }))
+    }
+
+    tasks.withType(Test) {
+        reports {
+            html {
+                destination file("${reporting.baseDir}/${task.name}/html")
+            }
+        }
+    }
+
+    tasks.withType(JacocoReport) {
+        dependsOn jacocoMerge
+        executionData jacocoMerge.destinationFile
+        // temporary hack to fix a bug requiring that there be at least one test case in each source set for coverage data to be generated;
+        // it should be if there is at least one test case in any of the source sets
+//        executionData = files(executionData.findAll({ it.exists() }))
+    }
+}
+
+apply plugin: 'spring-boot'
+
+version '1.0-SNAPSHOT'
+
+dependencies {
+    compile project(':project-a')
+    compile project(':project-b')
+
+    testCompile 'junit:junit'
+
+    integrationTestCompile 'org.springframework.boot:spring-boot-starter-test'
+}
+
+testReport {
+    dependsOn check, subprojects.testReport
+    reportOn test, integrationTest, subprojects.test, subprojects.integrationTest
+}
+
+jacocoMerge {
+    dependsOn check, subprojects.jacocoMerge
+    executionData test, integrationTest, subprojects.jacocoMerge.destinationFile
+    // temporary hack to fix a bug requiring that there be at least one test case in each source set for coverage data to be generated;
+    // it should be if there is at least one test case in any of the source sets
+    executionData = files(executionData.findAll({ it.exists() }))
+}
+
+//jacocoTestReport {
+//    dependsOn jacocoMerge
+//    executionData test, integrationTest, subprojects.test, subprojects.integrationTest
+//    executionData jacocoMerge.destinationFile
+    // temporary hack to fix a bug requiring that there be at least one test case in each source set for coverage data to be generated;
+    // it should be if there is at least one test case in any of the source sets
+//    executionData = files(executionData.findAll({ it.exists() }))
+//    sourceDirectories = files(sourceSets.main.java.srcDirs, subprojects.sourceSets.main.java.srcDirs)
+//    classDirectories = files(sourceSets.main.output.classesDir, subprojects.sourceSets.main.output.classesDir)
+//}
+
+task wrapper(type: Wrapper) {
+    gradleVersion '2.14'
+    distributionUrl "https://services.gradle.org/distributions/gradle-${gradleVersion}-all.zip"
+}

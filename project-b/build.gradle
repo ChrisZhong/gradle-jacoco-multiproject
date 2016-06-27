@@ -1,0 +1,10 @@
+apply plugin: 'spring-boot'
+
+version '1.0-SNAPSHOT'
+
+dependencies {
+    compile project(':common-a')
+    compile project(':common-b')
+
+    testCompile 'junit:junit'
+}
